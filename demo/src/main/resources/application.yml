@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    driver-class-name: com.amazonaws.secretsmanager.sql.AWSSecretsManagerMySQLDriver
+    url: jdbc-secretsmanager:mysql://{RDS_HOST_NAME}:3306/traffic?useSSL=true
+    username: {CREDENTIAL_NAME}
+  jpa:
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+        use_sql_comments: true
+        hbm2ddl:
+          auto: create
+  cloud:
+    aws:
+      credentials:
+        access-key: {AWS_ACCESS_KEY}
+        secret-key: {AWS_SECRET_KEY}
+      region:
+        static: ap-northeast-2
+      stack:
+        auto: false
+      sqs:
+        queue:
+          name: {SQS_QUEUE_NAME}
+          url: {SQS_QUEUE_URL}
