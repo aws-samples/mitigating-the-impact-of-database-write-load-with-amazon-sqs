@@ -8,6 +8,7 @@ import * as secrets from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as xray from 'aws-cdk-lib/aws-xray';
 import { Dashboard, GraphWidget, Metric } from 'aws-cdk-lib/aws-cloudwatch';
 import * as dotenv from 'dotenv';
 import {SqsEventSource} from "aws-cdk-lib/aws-lambda-event-sources";
@@ -139,14 +140,17 @@ export class DemogoQueueStack extends cdk.Stack {
         PROXY_ENDPOINT: proxy.endpoint,
         RDS_SECRET_NAME: rdsSecretName,
         SQS_QUEUE_URL: queue.queueUrl,
-        CHECK_COUNT: "4",
+        CHECK_COUNT: "3",
         SQS_MESSAGE_LIMIT: "10000",
+        SQS_INFLIGHT_MESSAGE_LIMIT: "1000",
         DB_CPU_LIMIT: "10",
         DB_CONNECTION_LIMIT: "80",
-        DB_METRIC_DURATION: "2"
+        DB_METRIC_DURATION: "2",
+        JITTER_MAX: "6"
       },
-      initialPolicy: [ cloudwatchMetricsPolicy ],
-      timeout: cdk.Duration.seconds(30)
+      initialPolicy: [ cloudwatchMetricsPolicy],
+      timeout: cdk.Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE
     });
     databaseCredentialsSecret.grantRead(rdsLambda);
     queue.grantConsumeMessages(rdsLambda);
@@ -154,7 +158,7 @@ export class DemogoQueueStack extends cdk.Stack {
     rdsLambda.addEventSource(
         new SqsEventSource(queue, {
           batchSize: 10,
-          maxConcurrency: 500,
+          maxConcurrency: 200,
           reportBatchItemFailures: true
         }),
     );
@@ -190,6 +194,8 @@ export class DemogoQueueStack extends cdk.Stack {
         'echo -e "export GRADLE_HOME=/opt/gradle/gradle-8.2.1\\nexport PATH=\\${GRADLE_HOME}/bin:\\${PATH}" > /etc/profile.d/gradle.sh',
         'chmod +x /etc/profile.d/gradle.sh',
         'source /etc/profile.d/gradle.sh',
+        'curl https://s3.us-east-2.amazonaws.com/aws-xray-assets.us-east-2/xray-daemon/aws-xray-daemon-3.x.rpm -o /home/ec2-user/xray.rpm',
+        'yum install -y /home/ec2-user/xray.rpm',
         `git clone ${gitUrl}`,
         'cd /aws-database-queue/demo',
         `sed -i "s|{RDS_HOST_NAME}|${proxy.endpoint}|g" -i ./src/main/resources/application.yml`,
@@ -198,6 +204,7 @@ export class DemogoQueueStack extends cdk.Stack {
         `sed -i "s|{AWS_SECRET_KEY}|${process.env.AWS_SECRET_KEY}|g" -i ./src/main/resources/application.yml`,
         `sed -i "s/{SQS_QUEUE_NAME}/${queue.queueName}/g" -i ./src/main/resources/application.yml`,
         `sed -i "s|{SQS_QUEUE_URL}|${queue.queueUrl}|g" -i ./src/main/resources/application.yml`,
+        'gradle wrapper',
         'chmod +x ./gradlew',
         './gradlew build',
         'sleep 15m',
@@ -209,6 +216,16 @@ export class DemogoQueueStack extends cdk.Stack {
         ec2.Port.tcp(22),
         'allow SSH connections from anywhere',
     );
+
+    const instanceRole = new iam.Role(this, 'demo-xray-iam-role', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'An IAM role for demo app',
+    });
+
+    const managedXrayPolicy = iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'AWSXRayDaemonWriteAccess',
+    );
+    instanceRole.addManagedPolicy(managedXrayPolicy);
 
     // 👇 create auto-scaling group
     const asg = new autoscaling.AutoScalingGroup(this, id+'-asg', {
@@ -228,6 +245,7 @@ export class DemogoQueueStack extends cdk.Stack {
       defaultInstanceWarmup: cdk.Duration.minutes(20),
       minCapacity: 4,
       maxCapacity: 4,
+      role: instanceRole
     });
 
     databaseCredentialsSecret.grantRead(asg);
@@ -254,7 +272,7 @@ export class DemogoQueueStack extends cdk.Stack {
     });
 
     const cpuUtilWidget = new GraphWidget({
-      width: 24,
+      width: 12,
       title: 'Database CPUUtilization',
       left: [
           new Metric({
@@ -262,6 +280,7 @@ export class DemogoQueueStack extends cdk.Stack {
             namespace: 'AWS/RDS',
             statistic: 'avg',
             label: 'CPU',
+            color: '#fe6e73',
             period: cdk.Duration.minutes(1),
             dimensionsMap: {
               'DBInstanceIdentifier': rdsInstance.instanceIdentifier
@@ -271,14 +290,15 @@ export class DemogoQueueStack extends cdk.Stack {
     });
 
     const queueWidget = new GraphWidget({
-      width:24,
+      width: 12,
       title: 'Queue Message Metrics',
       left: [
           new Metric({
             metricName: 'ApproximateNumberOfMessagesNotVisible',
             namespace: 'AWS/SQS',
             statistic: 'avg',
-            label: 'MsgNotVisible',
+            label: 'MsgNotVisible(In-Flight)',
+            color: '#08aad2',
             period: cdk.Duration.minutes(1),
             dimensionsMap: {
               'QueueName': queue.queueName
@@ -289,6 +309,7 @@ export class DemogoQueueStack extends cdk.Stack {
           namespace: 'AWS/SQS',
           statistic: 'avg',
           label: 'MsgVisible',
+          color: '#f89256',
           period: cdk.Duration.minutes(1),
           dimensionsMap: {
             'QueueName': queue.queueName
@@ -297,8 +318,104 @@ export class DemogoQueueStack extends cdk.Stack {
       ]
     })
 
-    dashboard.addWidgets(cpuUtilWidget);
-    dashboard.addWidgets(queueWidget)
+    const lambdaInvocationsWidget = new GraphWidget({
+      width: 8,
+      title: 'Lambda Invocations & Concurrency',
+      left: [
+        new Metric({
+          metricName: 'Invocations',
+          namespace: 'AWS/Lambda',
+          statistic: 'sum',
+          label: 'Invocations',
+          color: '#98dcf5',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        }),
+        new Metric({
+          metricName: 'ConcurrentExecutions',
+          namespace: 'AWS/Lambda',
+          statistic: 'max',
+          label: 'ConcurrencyExecutions',
+          color: '#dfb52c',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        })
+      ]
+    });
+
+    const lambdaDurationWidget = new GraphWidget({
+      width: 8,
+      title: 'Lambda Durations',
+      left: [
+        new Metric({
+          metricName: 'Duration',
+          namespace: 'AWS/Lambda',
+          statistic: 'min',
+          label: 'Duration minimum',
+          color: '#08aad2',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        }),
+        new Metric({
+          metricName: 'Duration',
+          namespace: 'AWS/Lambda',
+          statistic: 'max',
+          label: 'Duration maximum',
+          color: '#69ae34',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        }),
+        new Metric({
+          metricName: 'Duration',
+          namespace: 'AWS/Lambda',
+          statistic: 'avg',
+          label: 'Duration average',
+          color: '#f89256',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        })
+      ]
+    });
+
+    const lambdaErrorsWidget = new GraphWidget({
+      width: 8,
+      title: 'Lambda Error count and success rate (%)',
+      left: [
+        new Metric({
+          metricName: 'Errors',
+          namespace: 'AWS/Lambda',
+          statistic: 'sum',
+          label: 'Errors',
+          color: '#d13212',
+          period: cdk.Duration.minutes(1),
+          dimensionsMap: {
+            'FunctionName': rdsLambda.functionName
+          }
+        })
+      ]
+    })
+
+    dashboard.addWidgets(cpuUtilWidget, queueWidget);
+    dashboard.addWidgets(lambdaInvocationsWidget, lambdaDurationWidget, lambdaErrorsWidget)
+
+    new xray.CfnGroup(this, id + '-group', {
+      groupName: 'DemoAppGroup',
+      filterExpression: `((service(id(name: "${queue.queueUrl}" , type: "AWS::SQS::Queue" ))) OR (service(id(name: "DemoApp" , type: "AWS::EC2::Instance" ))) OR (service(id(name: "${rdsLambda.functionName}" , type: "AWS::Lambda" )))) AND !service(id(name: "${rdsLambda.functionName}", type: "client"))`,
+      insightsConfiguration: {
+        insightsEnabled: true,
+        notificationsEnabled: false,
+      },
+    });
 
     new cdk.CfnOutput(this, 'ALB DNS Name', {
       value: alb.loadBalancerDnsName ?? 'Something went wrong with the deploy'

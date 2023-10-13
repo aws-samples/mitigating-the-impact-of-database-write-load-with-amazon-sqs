@@ -28,7 +28,13 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation platform("io.awspring.cloud:spring-cloud-aws-dependencies:3.0.1")
+	implementation 'com.amazonaws:aws-xray-recorder-sdk-core:2.14.0'
+	implementation 'com.amazonaws:aws-xray-recorder-sdk-aws-sdk-v2:2.14.0'
+	implementation 'com.amazonaws:aws-xray-recorder-sdk-aws-sdk-v2-instrumentor:2.14.0'
+	implementation 'com.amazonaws:aws-xray-recorder-sdk-apache-http:2.14.0'
+	implementation 'com.amazonaws:aws-xray-recorder-sdk-spring:2.14.0'
 	implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
 	implementation 'com.amazonaws.secretsmanager:aws-secretsmanager-jdbc:1.0.12'
 	runtimeOnly 'com.mysql:mysql-connector-j'

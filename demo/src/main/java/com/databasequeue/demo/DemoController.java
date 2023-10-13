@@ -1,5 +1,6 @@
 package com.databasequeue.demo;
 
+import com.amazonaws.xray.spring.aop.XRayEnabled;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +13,7 @@ import lombok.val;
 
 @RestController
 @RequiredArgsConstructor
+@XRayEnabled
 @RequestMapping("")
 public class DemoController {
 

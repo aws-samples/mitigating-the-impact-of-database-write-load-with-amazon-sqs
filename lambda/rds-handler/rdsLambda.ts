@@ -21,9 +21,11 @@ const ssmClient = new SecretsManagerClient();
 const cloudwatchClient = new CloudWatchClient();
 const sqsClient = new SQSClient();
 const SQS_MESSAGE_LIMIT = parseInt(process.env.SQS_MESSAGE_LIMIT!);
+const SQS_INFLIGHT_MESSAGE_LIMIT = parseInt(process.env.SQS_INFLIGHT_MESSAGE_LIMIT!);
 const DB_CPU_LIMIT = parseInt(process.env.DB_CPU_LIMIT!);
 const DB_CONNECTION_LIMIT = parseInt(process.env.DB_CONNECTION_LIMIT!);
 const DB_METRIC_DURATION = parseInt(process.env.DB_METRIC_DURATION!);
+const JITTER_MAX = parseInt(process.env.JITTER_MAX!);
 
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   console.log("request:", JSON.stringify(event, null, 2));
@@ -42,7 +44,7 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
     return createFailResponse(messages);
   }
   const CHECK_COUNT = Number(process.env.CHECK_COUNT);
-  const jitter = rand(0, 3);
+  const jitter = rand(0, JITTER_MAX);
 
   // Check if it's OK to insert
   for (let i=0; i<CHECK_COUNT + jitter; i++) {
@@ -153,8 +155,9 @@ const checkQueueThrottle = async (queueUrl: string) => {
   const numberOfMessagesDelayed = parseInt(attributes["ApproximateNumberOfMessagesDelayed"]);
   const numberOfMessagesNotVisible = parseInt(attributes["ApproximateNumberOfMessagesNotVisible"]);
   console.log("Message Condition :", numberOfMessages, numberOfMessagesDelayed, numberOfMessagesNotVisible);
-  const numOfMessagesNotVisibleThrottle = numberOfMessagesNotVisible > SQS_MESSAGE_LIMIT;
-  const isThrottleCondition = numOfMessagesNotVisibleThrottle;
+  const numOfMessagesNotVisibleThrottle = numberOfMessagesNotVisible > SQS_INFLIGHT_MESSAGE_LIMIT;
+  const numOfMessagesThrottle = numberOfMessages > SQS_MESSAGE_LIMIT;
+  const isThrottleCondition = numOfMessagesNotVisibleThrottle || numOfMessagesThrottle;
   return isThrottleCondition;
 }
 
