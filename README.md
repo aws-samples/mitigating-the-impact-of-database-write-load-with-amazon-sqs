@@ -14,6 +14,7 @@ This demo is based on the `ap-northeast-2`. (Seoul region)
 ### Pre-Requisites
 - GitHub Username and GitHub Token
 - AWS Access Key and Secret Key with permissions
+- Node.js environment at your local machine
 - CDK-CLI at your local machine
   - Reference : https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html
 - Load testing tools such as JMeter
@@ -38,8 +39,17 @@ $ vim .env
 
 #### 5. Run this commands at root directory for deploying infrastructure at AWS
 ```shell
+# At root directory
+$ npm i
+
+$ cd ./lambda/rds-handler && npm i
+
+$ cd .. && cd ..
+
 $ npm run build
+
 $ cdk bootstrap
+
 $ cdk deploy
 
 ### Check
