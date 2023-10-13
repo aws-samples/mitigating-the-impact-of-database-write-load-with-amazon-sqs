@@ -63,6 +63,8 @@ $ cdk deploy
 
 Therefore, the demo application may not be booted properly; in this case, it is recommended to connect to the instance and run the Demo Applicaiton, or modify the "Launch Template" and refresh the instance after a certain period of time after the RDS Proxy opens.
 
+Please wait about 5 minutes even if the creation with the cdk is complete 🥹
+
 #### 5. If the step 4 is completed, Enjoy test with any load testing tool such as JMeter!
 
 The example test schedule with JMeter is at statics/tester.
