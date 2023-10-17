@@ -17,7 +17,7 @@ $ wget https://dlcdn.apache.org//jmeter/binaries/apache-jmeter-5.5.tgz
 $ tar -xf apache-jmeter-5.5.tgz
 ```
 
-3. Set the jmx file at same directory using scp or vi
+3. 3. Edit {{ELB DNS Name}} in the .jmx file and set the .jmx file at same directory using scp or editor (e.g. vi)
 
 4. Run the .jmx
 

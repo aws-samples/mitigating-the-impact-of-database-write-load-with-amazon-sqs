@@ -1,4 +1,4 @@
-# Asynchronously writing to a database with Amazon SQS
+# Mitigating the impact of database write load with Amazon SQS
 
 This demo helps handle write loads asynchronously and maintain existing databases with AWS SQS and Lambda.
 You'll be able to see and apply ways to handle intensive database write loads using the queue through this demo.
@@ -68,6 +68,8 @@ Please wait about 5 minutes even if the creation with the cdk is complete 🥹
 #### 5. If the step 4 is completed, Enjoy test with any load testing tool such as JMeter!
 
 The example test schedule with JMeter is at statics/tester.
+
+![](statics/images/demo-run.gif)
 
 ## Useful commands
 
