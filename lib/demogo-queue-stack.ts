@@ -197,7 +197,7 @@ export class DemogoQueueStack extends cdk.Stack {
         'curl https://s3.us-east-2.amazonaws.com/aws-xray-assets.us-east-2/xray-daemon/aws-xray-daemon-3.x.rpm -o /home/ec2-user/xray.rpm',
         'yum install -y /home/ec2-user/xray.rpm',
         `git clone ${gitUrl}`,
-        'cd /aws-database-queue/demo',
+        'cd /mitigating-the-impact-of-database-write-load-with-amazon-sqs/demo',
         `sed -i "s|{RDS_HOST_NAME}|${proxy.endpoint}|g" -i ./src/main/resources/application.yml`,
         `sed -i "s|{CREDENTIAL_NAME}|${rdsSecretName}|g" -i ./src/main/resources/application.yml`,
         `sed -i "s/{AWS_ACCESS_KEY}/${process.env.AWS_ACCESS_KEY}/g" -i ./src/main/resources/application.yml`,
