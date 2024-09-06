@@ -19,9 +19,9 @@
         "typescript": "~5.1.6"
     },
     "dependencies": {
-        "@aws-sdk/client-cloudwatch": "^3.395.0",
-        "@aws-sdk/client-secrets-manager": "^3.395.0",
-        "@aws-sdk/client-sqs": "^3.395.0",
+        "@aws-sdk/client-cloudwatch": "^3.645.0",
+        "@aws-sdk/client-secrets-manager": "^3.645.0",
+        "@aws-sdk/client-sqs": "^3.645.0",
         "constructs": "^10.0.0",
         "mysql2": "^3.9.8",
         "source-map-support": "^0.5.21"
